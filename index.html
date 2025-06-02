@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>2D Space Mission: Earth to Mars</title>
+    <title>2D Space Mission: Earth to Sun</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -65,123 +65,364 @@
     </style>
 </head>
 <body>
-    <h1>2D Space Mission: Earth to Mars</h1>
+    <h1>2D Space Mission: Earth to Sun</h1>
     <div id="simulationContainer">
         <canvas id="gameCanvas" width="800" height="600"></canvas>
         <div id="uiPanel">
             <p>Rocket Status: <span id="rocketStatus">Idle</span></p>
             <p>Fuel: <span id="fuelDisplay">1000</span> units</p>
             <p>Speed: <span id="speedDisplay">0</span> km/s</p>
-            <p>Distance to Mars: <span id="distMarsDisplay">-</span> km</p>
+            <p>Distance to Sun: <span id="distSunDisplay">-</span> km</p>
             <p>Game Time: <span id="gameTimeDisplay">0</span> days</p>
             <button id="launchButton">Prepare for Launch</button>
             <button id="resetButton">Reset Simulation</button>
         </div>
         <div id="messages">
-            <span id="launchWindowMessage">Planetary alignment unfavorable.</span>
+            <span id="launchWindowMessage">Ready for launch.</span>
         </div>
     </div>
 
-<script>
-const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
 
-const planets = [
-    { name: "Mercury", orbitRadius: 0.39 * AU, period: 88, color: "#aaa", radius: 3 },
-    { name: "Venus", orbitRadius: 0.72 * AU, period: 225, color: "#f5c542", radius: 4 },
-    { name: "Earth", orbitRadius: 1 * AU, period: 365.25, color: "blue", radius: 5 },
-    { name: "Mars", orbitRadius: 1.52 * AU, period: 687, color: "red", radius: 4 },
-    { name: "Jupiter", orbitRadius: 5.2 * AU, period: 4333, color: "#d2b48c", radius: 7 },
-    { name: "Saturn", orbitRadius: 9.58 * AU, period: 10759, color: "#f5deb3", radius: 6 },
-    { name: "Uranus", orbitRadius: 19.22 * AU, period: 30687, color: "#add8e6", radius: 5 },
-    { name: "Neptune", orbitRadius: 30.05 * AU, period: 60190, color: "#4169e1", radius: 5 }
-];
+        // DOM Elements for UI
+        const rocketStatusEl = document.getElementById('rocketStatus');
+        const fuelDisplayEl = document.getElementById('fuelDisplay');
+        const speedDisplayEl = document.getElementById('speedDisplay');
+        const distSunDisplayEl = document.getElementById('distSunDisplay');
+        const gameTimeDisplayEl = document.getElementById('gameTimeDisplay');
+        const launchButton = document.getElementById('launchButton');
+        const resetButton = document.getElementById('resetButton');
+        const launchWindowMessageEl = document.getElementById('launchWindowMessage');
 
-let sun, rocket, gameTime = 0, lastTimestamp = 0;
+        // Simulation Constants
+        const AU = 149.6e6; // Astronomical Unit in km (for display scaling)
+        const SCALE = 250 / AU; // Pixels per km (approx canvasWidth / (2*MarsOrbitRadius))
+        const SUN_X = canvas.width / 2;
+        const SUN_Y = canvas.height / 2;
+        const TIME_SCALE = 1 * 24 * 3600; // 1 game second = 1 day
 
-function initObjects() {
-    sun = { x: SUN_X, y: SUN_Y, radius: 10, color: 'yellow' };
+        const MERCURY_ORBIT_RADIUS = 0.39 * AU;
+        const VENUS_ORBIT_RADIUS = 0.72 * AU;
+        const EARTH_ORBIT_RADIUS = 1 * AU;
+        const MARS_ORBIT_RADIUS = 1.52 * AU;
+        const JUPITER_ORBIT_RADIUS = 5.20 * AU;
+        const SATURN_ORBIT_RADIUS = 9.58 * AU;
+        const URANUS_ORBIT_RADIUS = 19.22 * AU;
+        const NEPTUNE_ORBIT_RADIUS = 30.05 * AU;
 
-    planets.forEach(p => {
-        p.angle = Math.random() * 2 * Math.PI;
-        p.angularSpeed = (2 * Math.PI) / (p.period * 24 * 3600) * TIME_SCALE;
-        p.x = SUN_X + p.orbitRadius * SCALE * Math.cos(p.angle);
-        p.y = SUN_Y + p.orbitRadius * SCALE * Math.sin(p.angle);
-    });
+        // Orbital periods (approx in Earth days)
+        const MERCURY_PERIOD_DAYS = 88;
+        const VENUS_PERIOD_DAYS = 224.7;
+        const EARTH_PERIOD_DAYS = 365.25;
+        const MARS_PERIOD_DAYS = 687;
+        const JUPITER_PERIOD_DAYS = 4331;
+        const SATURN_PERIOD_DAYS = 10747;
+        const URANUS_PERIOD_DAYS = 30589;
+        const NEPTUNE_PERIOD_DAYS = 59800;
 
-    rocket = {
-        x: planets[2].x, y: planets[2].y, width: 6, height: 12, color: 'silver',
-        angle: 0, speed: 0.5, fuel: 1000, active: true
-    };
-}
+        // Angular speeds (radians per game second, scaled by TIME_SCALE)
+        const MERCURY_ANGULAR_SPEED = (2 * Math.PI) / (MERCURY_PERIOD_DAYS * 24 * 3600) * TIME_SCALE;
+        const VENUS_ANGULAR_SPEED = (2 * Math.PI) / (VENUS_PERIOD_DAYS * 24 * 3600) * TIME_SCALE;
+        const EARTH_ANGULAR_SPEED = (2 * Math.PI) / (EARTH_PERIOD_DAYS * 24 * 3600) * TIME_SCALE;
+        const MARS_ANGULAR_SPEED = (2 * Math.PI) / (MARS_PERIOD_DAYS * 24 * 3600) * TIME_SCALE;
+        const JUPITER_ANGULAR_SPEED = (2 * Math.PI) / (JUPITER_PERIOD_DAYS * 24 * 3600) * TIME_SCALE;
+        const SATURN_ANGULAR_SPEED = (2 * Math.PI) / (SATURN_PERIOD_DAYS * 24 * 3600) * TIME_SCALE;
+        const URANUS_ANGULAR_SPEED = (2 * Math.PI) / (URANUS_PERIOD_DAYS * 24 * 3600) * TIME_SCALE;
+        const NEPTUNE_ANGULAR_SPEED = (2 * Math.PI) / (NEPTUNE_PERIOD_DAYS * 24 * 3600) * TIME_SCALE;
 
-function update(dt) {
-    planets.forEach(p => {
-        p.angle += p.angularSpeed * dt;
-        p.x = SUN_X + p.orbitRadius * SCALE * Math.cos(p.angle);
-        p.y = SUN_Y + p.orbitRadius * SCALE * Math.sin(p.angle);
-    });
+        const ROCKET_THRUST_DELTA_V = 5 * 1000; // m/s (for burns)
+        const FUEL_PER_BURN = 200; // units
+        const HOHMANN_TRANSFER_TIME_APPROX_DAYS = 250; // Approximate for UI and timing
 
-    if (rocket.active && rocket.fuel > 0) {
-        const dx = sun.x - rocket.x;
-        const dy = sun.y - rocket.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        rocket.angle = Math.atan2(dy, dx);
-        rocket.x += rocket.speed * Math.cos(rocket.angle);
-        rocket.y += rocket.speed * Math.sin(rocket.angle);
-        rocket.fuel -= 1;
-    }
-}
+        // Game State
+        let sun, mercury, venus, earth, mars, jupiter, saturn, uranus, neptune, rocket;
+        let gameTime = 0; // in seconds (represents scaled time)
+        let lastTimestamp = 0;
+        let animationFrameId;
+        let hohmannTargetPos = null;
+        let hohmannStartTime = 0;
+        let hohmannTravelDurationScaled = 0; // Scaled travel time for the sim loop
 
-function drawRocket() {
-    ctx.save();
-    ctx.translate(rocket.x, rocket.y);
-    ctx.rotate(rocket.angle + Math.PI / 2);
-    ctx.fillStyle = rocket.color;
-    ctx.beginPath();
-    ctx.moveTo(0, -rocket.height);
-    ctx.lineTo(-rocket.width / 2, rocket.height / 2);
-    ctx.lineTo(rocket.width / 2, rocket.height / 2);
-    ctx.closePath();
-    ctx.fill();
-    ctx.restore();
-}
+        function initObjects() {
+            sun = { x: SUN_X, y: SUN_Y, radius: 10, color: 'yellow' };
+            mercury = {
+                orbitRadius: MERCURY_ORBIT_RADIUS, angle: 0, radius: 2, color: '#aaa',
+                x: SUN_X + MERCURY_ORBIT_RADIUS * SCALE, y: SUN_Y
+            };
+            venus = {
+                orbitRadius: VENUS_ORBIT_RADIUS, angle: Math.PI / 4, radius: 3, color: '#ffcc99',
+                x: SUN_X + VENUS_ORBIT_RADIUS * SCALE * Math.cos(Math.PI / 4),
+                y: SUN_Y + VENUS_ORBIT_RADIUS * SCALE * Math.sin(Math.PI / 4)
+            };
+            earth = {
+                orbitRadius: EARTH_ORBIT_RADIUS, angle: Math.PI / 2, radius: 4, color: 'blue',
+                x: SUN_X + EARTH_ORBIT_RADIUS * SCALE * Math.cos(Math.PI / 2),
+                y: SUN_Y + EARTH_ORBIT_RADIUS * SCALE * Math.sin(Math.PI / 2)
+            };
+            mars = {
+                orbitRadius: MARS_ORBIT_RADIUS, angle: Math.PI / 3, radius: 3, color: 'red',
+                x: SUN_X + MARS_ORBIT_RADIUS * SCALE * Math.cos(Math.PI / 3),
+                y: SUN_Y + MARS_ORBIT_RADIUS * SCALE * Math.sin(Math.PI / 3)
+            };
+            jupiter = {
+                orbitRadius: JUPITER_ORBIT_RADIUS, angle: Math.PI, radius: 8, color: '#ffcc66',
+                x: SUN_X + JUPITER_ORBIT_RADIUS * SCALE * Math.cos(Math.PI),
+                y: SUN_Y + JUPITER_ORBIT_RADIUS * SCALE * Math.sin(Math.PI)
+            };
+            saturn = {
+                orbitRadius: SATURN_ORBIT_RADIUS, angle: 3 * Math.PI / 2, radius: 7, color: '#ffcc33',
+                x: SUN_X + SATURN_ORBIT_RADIUS * SCALE * Math.cos(3 * Math.PI / 2),
+                y: SUN_Y + SATURN_ORBIT_RADIUS * SCALE * Math.sin(3 * Math.PI / 2)
+            };
+            uranus = {
+                orbitRadius: URANUS_ORBIT_RADIUS, angle: Math.PI / 6, radius: 5, color: '#66ccff',
+                x: SUN_X + URANUS_ORBIT_RADIUS * SCALE * Math.cos(Math.PI / 6),
+                y: SUN_Y + URANUS_ORBIT_RADIUS * SCALE * Math.sin(Math.PI / 6)
+            };
+            neptune = {
+                orbitRadius: NEPTUNE_ORBIT_RADIUS, angle: 5 * Math.PI / 6, radius: 5, color: '#3366ff',
+                x: SUN_X + NEPTUNE_ORBIT_RADIUS * SCALE * Math.cos(5 * Math.PI / 6),
+                y: SUN_Y + NEPTUNE_ORBIT_RADIUS * SCALE * Math.sin(5 * Math.PI / 6)
+            };
+            rocket = {
+                x: earth.x, y: earth.y, radius: 3, color: 'silver',
+                vx: 0, vy: 0, fuel: 1000, speed: 0,
+                state: 'IDLE_ON_EARTH' // States: IDLE_ON_EARTH, AWAITING_LAUNCH, BURN_TMI, COASTING_HOHMANN, BURN_MOI, ORBITING_SUN, FAILED
+            };
+            hohmannTargetPos = null;
+            hohmannStartTime = 0;
+            gameTime = 0;
+            updateUI();
+        }
 
-function drawScene() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+        function updatePlanetPositions(dt) {
+            mercury.angle += MERCURY_ANGULAR_SPEED * dt;
+            mercury.x = SUN_X + mercury.orbitRadius * SCALE * Math.cos(mercury.angle);
+            mercury.y = SUN_Y + mercury.orbitRadius * SCALE * Math.sin(mercury.angle);
 
-    // Sun
-    ctx.beginPath();
-    ctx.arc(sun.x, sun.y, sun.radius, 0, 2 * Math.PI);
-    ctx.fillStyle = sun.color;
-    ctx.fill();
+            venus.angle += VENUS_ANGULAR_SPEED * dt;
+            venus.x = SUN_X + venus.orbitRadius * SCALE * Math.cos(venus.angle);
+            venus.y = SUN_Y + venus.orbitRadius * SCALE * Math.sin(venus.angle);
 
-    // Planets
-    planets.forEach(p => {
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.radius, 0, 2 * Math.PI);
-        ctx.fillStyle = p.color;
-        ctx.fill();
-        ctx.font = "10px Arial";
-        ctx.fillText(p.name, p.x + 5, p.y);
-    });
+            earth.angle += EARTH_ANGULAR_SPEED * dt;
+            earth.x = SUN_X + earth.orbitRadius * SCALE * Math.cos(earth.angle);
+            earth.y = SUN_Y + earth.orbitRadius * SCALE * Math.sin(earth.angle);
 
-    drawRocket();
-}
+            mars.angle += MARS_ANGULAR_SPEED * dt;
+            mars.x = SUN_X + mars.orbitRadius * SCALE * Math.cos(mars.angle);
+            mars.y = SUN_Y + mars.orbitRadius * SCALE * Math.sin(mars.angle);
 
-function loop(timestamp) {
-    if (!lastTimestamp) lastTimestamp = timestamp;
-    const dt = (timestamp - lastTimestamp) / 1000; // in seconds
-    lastTimestamp = timestamp;
+            jupiter.angle += JUPITER_ANGULAR_SPEED * dt;
+            jupiter.x = SUN_X + jupiter.orbitRadius * SCALE * Math.cos(jupiter.angle);
+            jupiter.y = SUN_Y + jupiter.orbitRadius * SCALE * Math.sin(jupiter.angle);
 
-    update(dt);
-    drawScene();
+            saturn.angle += SATURN_ANGULAR_SPEED * dt;
+            saturn.x = SUN_X + saturn.orbitRadius * SCALE * Math.cos(saturn.angle);
+            saturn.y = SUN_Y + saturn.orbitRadius * SCALE * Math.sin(saturn.angle);
 
-    requestAnimationFrame(loop);
-}
+            uranus.angle += URANUS_ANGULAR_SPEED * dt;
+            uranus.x = SUN_X + uranus.orbitRadius * SCALE * Math.cos(uranus.angle);
+            uranus.y = SUN_Y + uranus.orbitRadius * SCALE * Math.sin(uranus.angle);
 
-initObjects();
-loop();
-</script>
+            neptune.angle += NEPTUNE_ANGULAR_SPEED * dt;
+            neptune.x = SUN_X + neptune.orbitRadius * SCALE * Math.cos(neptune.angle);
+            neptune.y = SUN_Y + neptune.orbitRadius * SCALE * Math.sin(neptune.angle);
+        }
+
+        function updateRocket(dt) {
+            if (rocket.state === 'IDLE_ON_EARTH' || rocket.state === 'AWAITING_LAUNCH') {
+                rocket.x = earth.x;
+                rocket.y = earth.y;
+                rocket.vx = 0; rocket.vy = 0; rocket.speed = 0;
+            } else if (rocket.state === 'BURN_TMI') {
+                if (rocket.fuel < FUEL_PER_BURN) {
+                    rocket.state = 'FAILED';
+                    rocketStatusEl.textContent = "Out of Fuel!";
+                    return;
+                }
+                rocket.fuel -= FUEL_PER_BURN;
+
+                const earthOrbitalSpeed = EARTH_ANGULAR_SPEED * earth.orbitRadius;
+                const targetSpeedBoost = ROCKET_THRUST_DELTA_V * SCALE * 0.01;
+
+                const earthTangentAngle = earth.angle + Math.PI / 2;
+
+                rocket.vx = targetSpeedBoost * Math.cos(earthTangentAngle);
+                rocket.vy = targetSpeedBoost * Math.sin(earthTangentAngle);
+                rocket.speed = Math.sqrt(rocket.vx**2 + rocket.vy**2) / (SCALE * 0.01);
+
+                rocket.state = 'COASTING_HOHMANN';
+                hohmannStartTime = gameTime;
+                hohmannTravelDurationScaled = HOHMANN_TRANSFER_TIME_APPROX_DAYS * 24 * 3600 / TIME_SCALE;
+
+                const transferAngle = earth.angle + Math.PI;
+                hohmannTargetPos = {
+                    x: SUN_X,
+                    y: SUN_Y
+                };
+            } else if (rocket.state === 'COASTING_HOHMANN') {
+                const timeInTransfer = gameTime - hohmannStartTime;
+                const progress = Math.min(1, timeInTransfer / hohmannTravelDurationScaled);
+
+                const launchX = SUN_X + earth.orbitRadius * SCALE * Math.cos(earth.angle - EARTH_ANGULAR_SPEED * (timeInTransfer));
+                const launchY = SUN_Y + earth.orbitRadius * SCALE * Math.sin(earth.angle - EARTH_ANGULAR_SPEED * (timeInTransfer));
+
+                const controlX = SUN_X;
+                const controlY = SUN_Y;
+
+                const t = progress;
+                rocket.x = (1 - t) * (1 - t) * launchX + 2 * (1 - t) * t * controlX + t * t * hohmannTargetPos.x;
+                rocket.y = (1 - t) * (1 - t) * launchY + 2 * (1 - t) * t * controlY + t * t * hohmannTargetPos.y;
+
+                const distToSun = Math.sqrt((rocket.x - SUN_X)**2 + (rocket.y - SUN_Y)**2) / SCALE;
+                rocket.speed = (ROCKET_THRUST_DELTA_V * 0.8 * (1 - progress * 0.5)) / 1000;
+
+                if (progress >= 1) {
+                    rocket.state = 'ORBITING_SUN';
+                }
+            } else if (rocket.state === 'ORBITING_SUN') {
+                const orbitDist = 10;
+                rocket.x = sun.x + orbitDist * Math.cos(gameTime * 0.1);
+                rocket.y = sun.y + orbitDist * Math.sin(gameTime * 0.1);
+            }
+        }
+
+        function drawCircle(x, y, radius, color) {
+            ctx.beginPath();
+            ctx.arc(x, y, radius, 0, 2 * Math.PI);
+            ctx.fillStyle = color;
+            ctx.fill();
+        }
+
+        function drawRocket(x, y, size, color) {
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.rotate(Math.atan2(rocket.vy, rocket.vx));
+            ctx.fillStyle = color;
+
+            // Draw rocket body
+            ctx.fillRect(-size / 2, -size, size, size * 2);
+
+            // Draw rocket nose
+            ctx.beginPath();
+            ctx.moveTo(size / 2, -size);
+            ctx.lineTo(size, -size - size / 2);
+            ctx.lineTo(-size, -size - size / 2);
+            ctx.lineTo(-size / 2, -size);
+            ctx.closePath();
+            ctx.fill();
+
+            // Draw rocket fins
+            ctx.fillRect(-size, size / 2, size / 2, size / 2);
+            ctx.fillRect(size / 2, size / 2, size / 2, size / 2);
+
+            ctx.restore();
+        }
+
+        function drawOrbit(centerX, centerY, radius, color) {
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius * SCALE, 0, 2 * Math.PI);
+            ctx.strokeStyle = color;
+            ctx.setLineDash([2, 4]);
+            ctx.stroke();
+            ctx.setLineDash([]);
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw orbits
+            drawOrbit(SUN_X, SUN_Y, MERCURY_ORBIT_RADIUS, '#aaa');
+            drawOrbit(SUN_X, SUN_Y, VENUS_ORBIT_RADIUS, '#ffcc99');
+            drawOrbit(SUN_X, SUN_Y, EARTH_ORBIT_RADIUS, '#333');
+            drawOrbit(SUN_X, SUN_Y, MARS_ORBIT_RADIUS, '#533');
+            drawOrbit(SUN_X, SUN_Y, JUPITER_ORBIT_RADIUS, '#ffcc66');
+            drawOrbit(SUN_X, SUN_Y, SATURN_ORBIT_RADIUS, '#ffcc33');
+            drawOrbit(SUN_X, SUN_Y, URANUS_ORBIT_RADIUS, '#66ccff');
+            drawOrbit(SUN_X, SUN_Y, NEPTUNE_ORBIT_RADIUS, '#3366ff');
+
+            // Draw Sun and planets
+            drawCircle(sun.x, sun.y, sun.radius, sun.color);
+            drawCircle(mercury.x, mercury.y, mercury.radius, mercury.color);
+            drawCircle(venus.x, venus.y, venus.radius, venus.color);
+            drawCircle(earth.x, earth.y, earth.radius, earth.color);
+            drawCircle(mars.x, mars.y, mars.radius, mars.color);
+            drawCircle(jupiter.x, jupiter.y, jupiter.radius, jupiter.color);
+            drawCircle(saturn.x, saturn.y, saturn.radius, saturn.color);
+            drawCircle(uranus.x, uranus.y, uranus.radius, uranus.color);
+            drawCircle(neptune.x, neptune.y, neptune.radius, neptune.color);
+
+            // Draw Rocket
+            if (rocket.state !== 'IDLE_ON_EARTH' || rocket.state === 'AWAITING_LAUNCH') {
+                drawRocket(rocket.x, rocket.y, rocket.radius * 2, rocket.color);
+            }
+        }
+
+        function updateUI() {
+            rocketStatusEl.textContent = rocket.state.replace(/_/g, ' ');
+            fuelDisplayEl.textContent = Math.round(rocket.fuel);
+            speedDisplayEl.textContent = Math.round(rocket.speed);
+            gameTimeDisplayEl.textContent = Math.round(gameTime * TIME_SCALE / (24 * 3600)) + " days";
+
+            if (rocket.state !== 'IDLE_ON_EARTH' && rocket.state !== 'AWAITING_LAUNCH') {
+                const distKm = Math.sqrt((rocket.x - sun.x)**2 + (rocket.y - sun.y)**2) / SCALE / 1e6;
+                distSunDisplayEl.textContent = distKm.toFixed(2) + " M km";
+            } else {
+                distSunDisplayEl.textContent = "-";
+            }
+
+            if (rocket.state === 'IDLE_ON_EARTH') {
+                launchButton.textContent = "Prepare for Launch";
+                launchButton.disabled = false;
+            } else if (rocket.state === 'AWAITING_LAUNCH') {
+                launchButton.textContent = "Launch to Sun!";
+                launchButton.disabled = false;
+            } else if (rocket.state === 'BURN_TMI' || rocket.state === 'COASTING_HOHMANN') {
+                launchButton.disabled = true;
+                launchButton.textContent = "In Flight...";
+            } else if (rocket.state === 'ORBITING_SUN' || rocket.state === 'FAILED') {
+                launchButton.disabled = true;
+                launchButton.textContent = "Mission Ended";
+            }
+        }
+
+        function gameLoop(timestamp) {
+            const dt = (timestamp - lastTimestamp) / 1000 || 0;
+            lastTimestamp = timestamp;
+            gameTime += dt;
+
+            updatePlanetPositions(dt);
+            updateRocket(dt);
+            draw();
+            updateUI();
+
+            animationFrameId = requestAnimationFrame(gameLoop);
+        }
+
+        launchButton.addEventListener('click', () => {
+            if (rocket.state === 'IDLE_ON_EARTH') {
+                rocket.state = 'AWAITING_LAUNCH';
+                launchButton.textContent = "Launch to Sun!";
+            } else if (rocket.state === 'AWAITING_LAUNCH') {
+                rocket.state = 'BURN_TMI';
+                launchButton.disabled = true;
+            }
+        });
+
+        resetButton.addEventListener('click', () => {
+            cancelAnimationFrame(animationFrameId);
+            initObjects();
+            lastTimestamp = 0;
+            launchWindowMessageEl.textContent = "Ready for launch.";
+            launchButton.textContent = "Prepare for Launch";
+            launchButton.disabled = false;
+            animationFrameId = requestAnimationFrame(gameLoop);
+        });
+
+        initObjects();
+        animationFrameId = requestAnimationFrame(gameLoop);
+    </script>
 </body>
 </html>
