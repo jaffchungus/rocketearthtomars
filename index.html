@@ -1,180 +1,432 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>🚀 Perfect Rocket Launch to Mars</title>
-  <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      overflow: hidden;
-      background: black;
-      font-family: monospace;
-    }
-    canvas {
-      display: block;
-      width: 100vw;
-      height: 100vh;
-      background: linear-gradient(to top, #004, #000);
-    }
-    #hud {
-      position: absolute;
-      top: 20px;
-      left: 20px;
-      background: rgba(0, 0, 0, 0.6);
-      color: #0f0;
-      padding: 15px;
-      border-radius: 10px;
-      font-size: 14px;
-      line-height: 1.6;
-    }
-    #countdown {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      font-size: 80px;
-      color: white;
-      font-family: monospace;
-      animation: pulse 1s infinite;
-    }
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.4; }
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2D Space Mission: Earth to Mars</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            background-color: #000;
+            color: #fff;
+            overflow: hidden; /* Hide scrollbars if canvas is too big */
+        }
+        #simulationContainer {
+            position: relative;
+            width: 800px; /* Canvas width */
+            height: 600px; /* Canvas height */
+            border: 1px solid #555;
+        }
+        canvas {
+            display: block;
+            background-color: #080818;
+        }
+        #uiPanel {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #444;
+            font-size: 14px;
+        }
+        #uiPanel p {
+            margin: 5px 0;
+        }
+        button {
+            background-color: #306090;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            margin-top: 10px;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        button:disabled {
+            background-color: #555;
+            cursor: not-allowed;
+        }
+        #messages {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(0,0,0,0.8);
+            color: #0f0; /* Green for messages */
+            padding: 8px;
+            border-radius: 4px;
+            text-align: center;
+        }
+    </style>
 </head>
 <body>
-  <canvas id="canvas"></canvas>
-  <div id="hud">
-    Status: <span id="status">Standing by</span><br>
-    Altitude: <span id="alt">0</span> m<br>
-    Speed: <span id="vel">0</span> m/s<br>
-    Fuel: <span id="fuel">100</span>%
-  </div>
-  <div id="countdown">5</div>
+    <h1>2D Space Mission: Earth to Mars</h1>
+    <div id="simulationContainer">
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        <div id="uiPanel">
+            <p>Rocket Status: <span id="rocketStatus">Idle</span></p>
+            <p>Fuel: <span id="fuelDisplay">1000</span> units</p>
+            <p>Speed: <span id="speedDisplay">0</span> km/s</p>
+            <p>Distance to Mars: <span id="distMarsDisplay">-</span> km</p>
+            <p>Game Time: <span id="gameTimeDisplay">0</span> days</p>
+            <button id="launchButton">Prepare for Launch</button>
+            <button id="resetButton">Reset Simulation</button>
+        </div>
+        <div id="messages">
+            <span id="launchWindowMessage">Planetary alignment unfavorable.</span>
+        </div>
+    </div>
 
-  <script>
-    const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
-    canvas.width = innerWidth;
-    canvas.height = innerHeight;
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
 
-    // Rocket properties
-    const rocket = {
-      x: canvas.width / 2,
-      y: canvas.height - 120,
-      width: 30,
-      height: 90,
-      velocityY: 0,
-      acceleration: 0,
-      fuel: 100,
-      thrusting: false
-    };
+        // DOM Elements for UI
+        const rocketStatusEl = document.getElementById('rocketStatus');
+        const fuelDisplayEl = document.getElementById('fuelDisplay');
+        const speedDisplayEl = document.getElementById('speedDisplay');
+        const distMarsDisplayEl = document.getElementById('distMarsDisplay');
+        const gameTimeDisplayEl = document.getElementById('gameTimeDisplay');
+        const launchButton = document.getElementById('launchButton');
+        const resetButton = document.getElementById('resetButton');
+        const launchWindowMessageEl = document.getElementById('launchWindowMessage');
 
-    let gravity = 0.15;
-    let thrustPower = -0.4;
-    let launched = false;
-    let countdown = 5;
-    const altEl = document.getElementById('alt');
-    const velEl = document.getElementById('vel');
-    const fuelEl = document.getElementById('fuel');
-    const statusEl = document.getElementById('status');
-    const countdownEl = document.getElementById('countdown');
+        // Simulation Constants
+        const AU = 149.6e6; // Astronomical Unit in km (for display scaling)
+        const SCALE = 250 / AU; // Pixels per km (approx canvasWidth / (2*MarsOrbitRadius))
+        const SUN_X = canvas.width / 2;
+        const SUN_Y = canvas.height / 2;
+        const TIME_SCALE = 1 * 24 * 3600; // 1 game second = 1 day
 
-    // Control input
-    window.addEventListener('keydown', e => {
-      if (e.key === 'ArrowUp') rocket.thrusting = true;
-    });
-    window.addEventListener('keyup', e => {
-      if (e.key === 'ArrowUp') rocket.thrusting = false;
-    });
+        const EARTH_ORBIT_RADIUS = 1 * AU;
+        const MARS_ORBIT_RADIUS = 1.52 * AU;
+        // Orbital periods (approx in Earth days)
+        const EARTH_PERIOD_DAYS = 365.25;
+        const MARS_PERIOD_DAYS = 687;
+        // Angular speeds (radians per game second, scaled by TIME_SCALE)
+        const EARTH_ANGULAR_SPEED = (2 * Math.PI) / (EARTH_PERIOD_DAYS * 24 * 3600) * TIME_SCALE;
+        const MARS_ANGULAR_SPEED = (2 * Math.PI) / (MARS_PERIOD_DAYS * 24 * 3600) * TIME_SCALE;
 
-    function drawSky() {
-      const space = Math.min(rocket.y / canvas.height, 1);
-      const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-      gradient.addColorStop(0, `rgb(${0},${0},${50 + space * 100})`);
-      gradient.addColorStop(1, `rgb(0,0,${space * 255})`);
-      ctx.fillStyle = gradient;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-    }
+        const ROCKET_THRUST_DELTA_V = 5 * 1000; // m/s (for burns)
+        const FUEL_PER_BURN = 200; // units
+        const HOHMANN_TRANSFER_TIME_APPROX_DAYS = 250; // Approximate for UI and timing
 
-    function drawRocket() {
-      // Rocket body
-      ctx.fillStyle = '#CCC';
-      ctx.fillRect(rocket.x - rocket.width / 2, rocket.y, rocket.width, rocket.height);
+        // Game State
+        let sun, earth, mars, rocket;
+        let gameTime = 0; // in seconds (represents scaled time)
+        let lastTimestamp = 0;
+        let animationFrameId;
+        let hohmannTargetPos = null;
+        let hohmannStartTime = 0;
+        let hohmannTravelDurationScaled = 0; // Scaled travel time for the sim loop
 
-      // Nose cone
-      ctx.beginPath();
-      ctx.moveTo(rocket.x - rocket.width / 2, rocket.y);
-      ctx.lineTo(rocket.x, rocket.y - 20);
-      ctx.lineTo(rocket.x + rocket.width / 2, rocket.y);
-      ctx.closePath();
-      ctx.fillStyle = '#999';
-      ctx.fill();
 
-      // Flames
-      if (rocket.thrusting && rocket.fuel > 0) {
-        ctx.beginPath();
-        ctx.moveTo(rocket.x, rocket.y + rocket.height);
-        ctx.lineTo(rocket.x - 10, rocket.y + rocket.height + Math.random() * 30 + 10);
-        ctx.lineTo(rocket.x + 10, rocket.y + rocket.height + Math.random() * 30 + 10);
-        ctx.closePath();
-        ctx.fillStyle = `rgb(255, ${Math.random()*200}, 0)`;
-        ctx.fill();
-      }
-    }
-
-    function updateRocket() {
-      if (rocket.thrusting && rocket.fuel > 0) {
-        rocket.acceleration = thrustPower;
-        rocket.fuel -= 0.15;
-        statusEl.textContent = "Thrusting";
-      } else {
-        rocket.acceleration = 0;
-        statusEl.textContent = rocket.y < canvas.height - 120 ? "Freefall" : "Idle";
-      }
-
-      rocket.velocityY += gravity + rocket.acceleration;
-      rocket.y += rocket.velocityY;
-
-      // Prevent crash to bottom
-      if (rocket.y > canvas.height - 120) {
-        rocket.y = canvas.height - 120;
-        rocket.velocityY = 0;
-      }
-
-      // HUD updates
-      altEl.textContent = Math.max(0, Math.floor(canvas.height - rocket.y));
-      velEl.textContent = rocket.velocityY.toFixed(2);
-      fuelEl.textContent = Math.max(0, rocket.fuel.toFixed(0));
-    }
-
-    function animate() {
-      drawSky();
-      updateRocket();
-      drawRocket();
-      requestAnimationFrame(animate);
-    }
-
-    function beginCountdown() {
-      countdownEl.textContent = countdown;
-      const timer = setInterval(() => {
-        countdown--;
-        if (countdown > 0) {
-          countdownEl.textContent = countdown;
-        } else {
-          clearInterval(timer);
-          countdownEl.textContent = "🚀";
-          setTimeout(() => countdownEl.style.display = "none", 1000);
-          launched = true;
-          statusEl.textContent = "Liftoff";
-          animate();
+        function initObjects() {
+            sun = { x: SUN_X, y: SUN_Y, radius: 10, color: 'yellow' };
+            earth = {
+                orbitRadius: EARTH_ORBIT_RADIUS, angle: 0, radius: 5, color: 'blue',
+                x: SUN_X + EARTH_ORBIT_RADIUS * SCALE, y: SUN_Y
+            };
+            mars = { // Start Mars ahead for typical Hohmann window
+                orbitRadius: MARS_ORBIT_RADIUS, angle: Math.PI / 3, radius: 4, color: 'red',
+                x: SUN_X + MARS_ORBIT_RADIUS * SCALE * Math.cos(Math.PI / 3),
+                y: SUN_Y + MARS_ORBIT_RADIUS * SCALE * Math.sin(Math.PI / 3)
+            };
+            rocket = {
+                x: earth.x, y: earth.y, radius: 3, color: 'silver',
+                vx: 0, vy: 0, fuel: 1000, speed: 0,
+                state: 'IDLE_ON_EARTH' // States: IDLE_ON_EARTH, AWAITING_LAUNCH, BURN_TMI, COASTING_HOHMANN, BURN_MOI, ORBITING_MARS, FAILED
+            };
+            hohmannTargetPos = null;
+            hohmannStartTime = 0;
+            gameTime = 0;
+            updateUI();
         }
-      }, 1000);
-    }
 
-    beginCountdown();
-  </script>
+        function updatePlanetPositions(dt) {
+            earth.angle += EARTH_ANGULAR_SPEED * dt;
+            earth.x = SUN_X + earth.orbitRadius * SCALE * Math.cos(earth.angle);
+            earth.y = SUN_Y + earth.orbitRadius * SCALE * Math.sin(earth.angle);
+
+            mars.angle += MARS_ANGULAR_SPEED * dt;
+            mars.x = SUN_X + mars.orbitRadius * SCALE * Math.cos(mars.angle);
+            mars.y = SUN_Y + mars.orbitRadius * SCALE * Math.sin(mars.angle);
+        }
+
+        function checkLaunchWindow() {
+            // Simplified: Mars should be ahead of Earth by a certain angle
+            // Optimal phase angle for Mars ahead of Earth is ~44 degrees (0.768 rad)
+            let phaseAngle = mars.angle - earth.angle;
+            phaseAngle = (phaseAngle % (2 * Math.PI) + (2 * Math.PI)) % (2 * Math.PI); // Normalize to 0-2PI
+
+            const optimalPhase = 0.768; // radians
+            const windowTolerance = 0.15; // radians (generous window)
+
+            if (Math.abs(phaseAngle - optimalPhase) < windowTolerance ||
+                Math.abs(phaseAngle - (optimalPhase + 2 * Math.PI)) < windowTolerance ||
+                Math.abs(phaseAngle - (optimalPhase - 2 * Math.PI)) < windowTolerance) {
+                launchWindowMessageEl.textContent = "Optimal Launch Window OPEN!";
+                launchWindowMessageEl.style.color = "#0f0"; // Green
+                if (rocket.state === 'AWAITING_LAUNCH') {
+                    launchButton.disabled = false;
+                    launchButton.textContent = "Launch to Mars!";
+                }
+                return true;
+            } else {
+                launchWindowMessageEl.textContent = "Planetary alignment unfavorable.";
+                launchWindowMessageEl.style.color = "#ff8080"; // Light red
+                if (rocket.state === 'AWAITING_LAUNCH') {
+                    launchButton.disabled = true;
+                    launchButton.textContent = "Launch (Window Closed)";
+                }
+                return false;
+            }
+        }
+        
+        function getAngle(x1, y1, x2, y2) {
+            return Math.atan2(y2 - y1, x2 - x1);
+        }
+
+        function updateRocket(dt) {
+            if (rocket.state === 'IDLE_ON_EARTH' || rocket.state === 'AWAITING_LAUNCH') {
+                rocket.x = earth.x;
+                rocket.y = earth.y;
+                rocket.vx = 0; rocket.vy = 0; rocket.speed = 0;
+            } else if (rocket.state === 'BURN_TMI') {
+                // Simplified TMI burn - instantaneous velocity change towards a prograde Hohmann trajectory
+                // The target for the rocket isn't Mars directly, but a point on Mars's orbit
+                // where Mars will be after the transfer time.
+                if (rocket.fuel < FUEL_PER_BURN) {
+                    rocket.state = 'FAILED';
+                    rocketStatusEl.textContent = "Out of Fuel!";
+                    return;
+                }
+                rocket.fuel -= FUEL_PER_BURN;
+
+                // Calculate velocity needed for transfer orbit (highly simplified)
+                // Aim for a velocity slightly greater than Earth's orbital velocity, in Earth's direction of travel
+                const earthOrbitalSpeed = EARTH_ANGULAR_SPEED * earth.orbitRadius; // This is not true speed, but proportional for sim
+                const targetSpeedBoost = ROCKET_THRUST_DELTA_V * SCALE * 0.01; // Scaled boost
+                
+                // Get Earth's current orbital direction (tangential)
+                const earthTangentAngle = earth.angle + Math.PI / 2;
+                
+                rocket.vx = targetSpeedBoost * Math.cos(earthTangentAngle);
+                rocket.vy = targetSpeedBoost * Math.sin(earthTangentAngle);
+                rocket.speed = Math.sqrt(rocket.vx**2 + rocket.vy**2) / (SCALE * 0.01); // Approx km/s
+
+                rocket.state = 'COASTING_HOHMANN';
+                hohmannStartTime = gameTime;
+                // Scaled duration for simulation loop
+                hohmannTravelDurationScaled = HOHMANN_TRANSFER_TIME_APPROX_DAYS * 24 * 3600 / TIME_SCALE; 
+
+                // Set a simplified target: aphelion of Hohmann transfer (Mars' orbit radius, opposite sun from Earth's launch point)
+                // This is a VAST simplification. A real Hohmann transfer targets where Mars WILL BE.
+                const transferAngle = earth.angle + Math.PI; // Opposite side of the sun from launch
+                hohmannTargetPos = {
+                    x: SUN_X + mars.orbitRadius * SCALE * Math.cos(transferAngle),
+                    y: SUN_Y + mars.orbitRadius * SCALE * Math.sin(transferAngle)
+                };
+
+            } else if (rocket.state === 'COASTING_HOHMANN') {
+                // Simplified path: interpolate towards a point on Mars's orbit
+                // This avoids complex orbital mechanics calculations in the loop
+                const timeInTransfer = gameTime - hohmannStartTime;
+                const progress = Math.min(1, timeInTransfer / hohmannTravelDurationScaled);
+
+                // Simple interpolation from Earth's launch position towards hohmannTargetPos
+                // This isn't a true ellipse, but a visual stand-in for simplicity.
+                const launchX = SUN_X + earth.orbitRadius * SCALE * Math.cos(earth.angle - EARTH_ANGULAR_SPEED * (timeInTransfer)); // Approx launch pos
+                const launchY = SUN_Y + earth.orbitRadius * SCALE * Math.sin(earth.angle - EARTH_ANGULAR_SPEED * (timeInTransfer)); // Approx launch pos
+                
+                // Calculate a pseudo-elliptical path point
+                // Midpoint control for slight curve (very simplified)
+                const controlX = SUN_X;
+                const controlY = SUN_Y;
+
+                const t = progress;
+                rocket.x = (1 - t) * (1 - t) * launchX + 2 * (1 - t) * t * controlX + t * t * hohmannTargetPos.x;
+                rocket.y = (1 - t) * (1 - t) * launchY + 2 * (1 - t) * t * controlY + t * t * hohmannTargetPos.y;
+
+                // Update speed (crude approximation - could decay based on distance from sun)
+                const distToSun = Math.sqrt((rocket.x - SUN_X)**2 + (rocket.y - SUN_Y)**2) / SCALE;
+                rocket.speed = (ROCKET_THRUST_DELTA_V * 0.8 * (1 - progress * 0.5)) / 1000; // km/s display, decays
+
+                if (progress >= 1) {
+                    rocket.state = 'BURN_MOI_CHECK'; // Check if near Mars
+                }
+            } else if (rocket.state === 'BURN_MOI_CHECK') {
+                const distToMarsActual = Math.sqrt((rocket.x - mars.x)**2 + (rocket.y - mars.y)**2) / SCALE;
+                if (distToMarsActual < mars.orbitRadius * 0.15) { // If close enough to Mars
+                    if (rocket.fuel < FUEL_PER_BURN) {
+                        rocket.state = 'FAILED';
+                        rocketStatusEl.textContent = "Out of Fuel for MOI!";
+                        return;
+                    }
+                    rocket.fuel -= FUEL_PER_BURN;
+                    rocket.speed *= 0.3; // Simulate slowdown for orbit insertion
+                    rocket.state = 'ORBITING_MARS';
+                } else { // Missed Mars
+                    rocket.state = 'FAILED';
+                    rocketStatusEl.textContent = "Missed Mars!";
+                }
+            } else if (rocket.state === 'ORBITING_MARS') {
+                // Simple circular orbit around Mars
+                const orbitDist = 15; // pixels
+                rocket.x = mars.x + orbitDist * Math.cos(gameTime * 0.1); // Slow orbit
+                rocket.y = mars.y + orbitDist * Math.sin(gameTime * 0.1);
+            }
+            // Rocket position update for non-coasting states could be here if vx,vy used
+            if (rocket.state !== 'COASTING_HOHMANN' && rocket.state !== 'IDLE_ON_EARTH' && rocket.state !== 'AWAITING_LAUNCH' && rocket.state !== 'ORBITING_MARS') {
+                 // For future use if vx, vy based movement is re-enabled for other states
+                 // rocket.x += rocket.vx * dt * SCALE_MOVEMENT_FACTOR; 
+                 // rocket.y += rocket.vy * dt * SCALE_MOVEMENT_FACTOR;
+            }
+        }
+
+        function drawCircle(x, y, radius, color) {
+            ctx.beginPath();
+            ctx.arc(x, y, radius, 0, 2 * Math.PI);
+            ctx.fillStyle = color;
+            ctx.fill();
+        }
+
+        function drawOrbit(centerX, centerY, radius, color) {
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius * SCALE, 0, 2 * Math.PI);
+            ctx.strokeStyle = color;
+            ctx.setLineDash([2, 4]);
+            ctx.stroke();
+            ctx.setLineDash([]);
+        }
+        
+        function drawRocketPath() {
+            if (rocket.state === 'COASTING_HOHMANN' && hohmannTargetPos) {
+                ctx.beginPath();
+                const launchAngle = Math.atan2(rocket.y - SUN_Y, rocket.x - SUN_X); // this is current, not launch
+                const targetAngle = Math.atan2(hohmannTargetPos.y - SUN_Y, hohmannTargetPos.x - SUN_X);
+                
+                // This is just drawing an arc, not the true path being followed.
+                // True path is quadratic bezier in updateRocket.
+                // For a better visual, would need to plot points from the bezier.
+                // Here, using arc for simplicity.
+                const initialDist = Math.sqrt((rocket.x-SUN_X)**2 + (rocket.y-SUN_Y)**2);
+                const finalDist = Math.sqrt((hohmannTargetPos.x-SUN_X)**2 + (hohmannTargetPos.y-SUN_Y)**2);
+
+                ctx.ellipse(SUN_X, SUN_Y, 
+                            (initialDist + finalDist)/2, // semi-major axis approx
+                            Math.min(initialDist, finalDist) * 1.1 , // semi-minor axis approx to make it elliptical
+                            (launchAngle + targetAngle)/2, // rotation approx
+                            0,  // Best to use actual startAngle for arc based on launch.
+                            2*Math.PI); // This draws a full ellipse, not just path segment.
+                
+                // A simpler line to target:
+                // ctx.moveTo(rocket.x, rocket.y);
+                // ctx.lineTo(hohmannTargetPos.x, hohmannTargetPos.y);
+
+                ctx.strokeStyle = "rgba(128, 128, 128, 0.5)";
+                ctx.stroke();
+            }
+        }
+
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw orbits
+            drawOrbit(SUN_X, SUN_Y, EARTH_ORBIT_RADIUS, '#333');
+            drawOrbit(SUN_X, SUN_Y, MARS_ORBIT_RADIUS, '#533');
+
+            // Draw Sun, Earth, Mars
+            drawCircle(sun.x, sun.y, sun.radius, sun.color);
+            drawCircle(earth.x, earth.y, earth.radius, earth.color);
+            drawCircle(mars.x, mars.y, mars.radius, mars.color);
+
+            // Draw Rocket
+            if (rocket.state !== 'IDLE_ON_EARTH' || rocket.state === 'AWAITING_LAUNCH') { // Draw if not on Earth or preparing
+                drawCircle(rocket.x, rocket.y, rocket.radius, rocket.color);
+                 if (rocket.state === 'COASTING_HOHMANN') {
+                    // drawRocketPath(); // Optional: visualize planned path
+                }
+            }
+        }
+
+        function updateUI() {
+            rocketStatusEl.textContent = rocket.state.replace(/_/g, ' ');
+            fuelDisplayEl.textContent = Math.round(rocket.fuel);
+            speedDisplayEl.textContent = Math.round(rocket.speed);
+            gameTimeDisplayEl.textContent = Math.round(gameTime * TIME_SCALE / (24 * 3600)) + " days";
+
+            if (rocket.state !== 'IDLE_ON_EARTH' && rocket.state !== 'AWAITING_LAUNCH') {
+                const distKm = Math.sqrt((rocket.x - mars.x)**2 + (rocket.y - mars.y)**2) / SCALE / 1e6; // in million km
+                distMarsDisplayEl.textContent = distKm.toFixed(2) + " M km";
+            } else {
+                distMarsDisplayEl.textContent = "-";
+            }
+
+            if (rocket.state === 'IDLE_ON_EARTH') {
+                launchButton.textContent = "Prepare for Launch";
+                launchButton.disabled = false;
+            } else if (rocket.state === 'AWAITING_LAUNCH') {
+                // Button text/state handled by checkLaunchWindow
+            } else if (rocket.state === 'BURN_TMI' || rocket.state === 'COASTING_HOHMANN' || rocket.state === 'BURN_MOI_CHECK') {
+                launchButton.disabled = true;
+                launchButton.textContent = "In Flight...";
+            } else if (rocket.state === 'ORBITING_MARS' || rocket.state === 'FAILED') {
+                launchButton.disabled = true;
+                launchButton.textContent = "Mission Ended";
+            }
+        }
+
+        function gameLoop(timestamp) {
+            const dt = (timestamp - lastTimestamp) / 1000 || 0; // delta time in seconds
+            lastTimestamp = timestamp;
+            gameTime += dt;
+
+            updatePlanetPositions(dt);
+            if (rocket.state === 'AWAITING_LAUNCH') {
+                checkLaunchWindow(); // This will enable/disable launch button
+            }
+            updateRocket(dt);
+            draw();
+            updateUI();
+
+            animationFrameId = requestAnimationFrame(gameLoop);
+        }
+
+        // Event Listeners
+        launchButton.addEventListener('click', () => {
+            if (rocket.state === 'IDLE_ON_EARTH') {
+                rocket.state = 'AWAITING_LAUNCH';
+                launchButton.textContent = "Launch (Window Closed)";
+                launchButton.disabled = true; // Disabled until window opens
+                checkLaunchWindow(); // Initial check
+            } else if (rocket.state === 'AWAITING_LAUNCH' && checkLaunchWindow()) { // Re-check window on click
+                rocket.state = 'BURN_TMI';
+                launchButton.disabled = true;
+            }
+        });
+
+        resetButton.addEventListener('click', () => {
+            cancelAnimationFrame(animationFrameId);
+            initObjects();
+            lastTimestamp = 0; // Reset timestamp to avoid large dt on restart
+            launchWindowMessageEl.textContent = "Planetary alignment unfavorable.";
+            launchWindowMessageEl.style.color = "#ff8080";
+            launchButton.textContent = "Prepare for Launch";
+            launchButton.disabled = false;
+            animationFrameId = requestAnimationFrame(gameLoop);
+        });
+
+        // Start simulation
+        initObjects();
+        animationFrameId = requestAnimationFrame(gameLoop);
+
+    </script>
 </body>
 </html>
