@@ -1,182 +1,187 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Mars Rocket Launch Simulator</title>
-  <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      overflow: hidden;
-      background: black;
-      font-family: monospace;
-    }
-    canvas {
-      display: block;
-      width: 100vw;
-      height: 100vh;
-    }
-    #hud {
-      position: absolute;
-      top: 20px;
-      left: 20px;
-      background: rgba(0, 0, 0, 0.7);
-      color: #0f0;
-      padding: 15px;
-      border-radius: 10px;
-      font-size: 14px;
-      line-height: 1.6;
-    }
-    #countdown {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      font-size: 80px;
-      color: white;
-      font-family: monospace;
-      animation: pulse 1s infinite;
-    }
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.4; }
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2D Space Mission: Earth to Mars</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            background-color: #000;
+            color: #fff;
+            overflow: hidden; /* Hide scrollbars if canvas is too big */
+        }
+        #simulationContainer {
+            position: relative;
+            width: 800px; /* Canvas width */
+            height: 600px; /* Canvas height */
+            border: 1px solid #555;
+        }
+        canvas {
+            display: block;
+            background-color: #080818;
+        }
+        #uiPanel {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #444;
+            font-size: 14px;
+        }
+        #uiPanel p {
+            margin: 5px 0;
+        }
+        button {
+            background-color: #306090;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            margin-top: 10px;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        button:disabled {
+            background-color: #555;
+            cursor: not-allowed;
+        }
+        #messages {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(0,0,0,0.8);
+            color: #0f0; /* Green for messages */
+            padding: 8px;
+            border-radius: 4px;
+            text-align: center;
+        }
+    </style>
 </head>
 <body>
-  <canvas id="canvas"></canvas>
-  <div id="hud">
-    Status: <span id="status">Standing by</span><br>
-    Altitude: <span id="alt">0</span> m<br>
-    Speed: <span id="vel">0</span> m/s<br>
-    Fuel: <span id="fuel">100</span>%<br>
-    Stage: <span id="stage">1</span>
-  </div>
-  <div id="countdown">5</div>
-  <script>
-    const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
-    canvas.width = innerWidth;
-    canvas.height = innerHeight;
+    <h1>2D Space Mission: Earth to Mars</h1>
+    <div id="simulationContainer">
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        <div id="uiPanel">
+            <p>Rocket Status: <span id="rocketStatus">Idle</span></p>
+            <p>Fuel: <span id="fuelDisplay">1000</span> units</p>
+            <p>Speed: <span id="speedDisplay">0</span> km/s</p>
+            <p>Distance to Mars: <span id="distMarsDisplay">-</span> km</p>
+            <p>Game Time: <span id="gameTimeDisplay">0</span> days</p>
+            <button id="launchButton">Prepare for Launch</button>
+            <button id="resetButton">Reset Simulation</button>
+        </div>
+        <div id="messages">
+            <span id="launchWindowMessage">Planetary alignment unfavorable.</span>
+        </div>
+    </div>
 
-    const rocket = {
-      x: canvas.width / 2,
-      y: canvas.height - 120,
-      width: 30,
-      height: 90,
-      velocityY: 0,
-      acceleration: 0,
-      fuel: 100,
-      thrusting: false,
-      stage: 1
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+const planets = [
+    { name: "Mercury", orbitRadius: 0.39 * AU, period: 88, color: "#aaa", radius: 3 },
+    { name: "Venus", orbitRadius: 0.72 * AU, period: 225, color: "#f5c542", radius: 4 },
+    { name: "Earth", orbitRadius: 1 * AU, period: 365.25, color: "blue", radius: 5 },
+    { name: "Mars", orbitRadius: 1.52 * AU, period: 687, color: "red", radius: 4 },
+    { name: "Jupiter", orbitRadius: 5.2 * AU, period: 4333, color: "#d2b48c", radius: 7 },
+    { name: "Saturn", orbitRadius: 9.58 * AU, period: 10759, color: "#f5deb3", radius: 6 },
+    { name: "Uranus", orbitRadius: 19.22 * AU, period: 30687, color: "#add8e6", radius: 5 },
+    { name: "Neptune", orbitRadius: 30.05 * AU, period: 60190, color: "#4169e1", radius: 5 }
+];
+
+let sun, rocket, gameTime = 0, lastTimestamp = 0;
+
+function initObjects() {
+    sun = { x: SUN_X, y: SUN_Y, radius: 10, color: 'yellow' };
+
+    planets.forEach(p => {
+        p.angle = Math.random() * 2 * Math.PI;
+        p.angularSpeed = (2 * Math.PI) / (p.period * 24 * 3600) * TIME_SCALE;
+        p.x = SUN_X + p.orbitRadius * SCALE * Math.cos(p.angle);
+        p.y = SUN_Y + p.orbitRadius * SCALE * Math.sin(p.angle);
+    });
+
+    rocket = {
+        x: planets[2].x, y: planets[2].y, width: 6, height: 12, color: 'silver',
+        angle: 0, speed: 0.5, fuel: 1000, active: true
     };
+}
 
-    let gravity = 0.15;
-    let thrustPower = -0.4;
-    let launched = false;
-    let countdown = 5;
-    const altEl = document.getElementById('alt');
-    const velEl = document.getElementById('vel');
-    const fuelEl = document.getElementById('fuel');
-    const statusEl = document.getElementById('status');
-    const stageEl = document.getElementById('stage');
-    const countdownEl = document.getElementById('countdown');
-
-    window.addEventListener('keydown', e => {
-      if (e.key === 'ArrowUp') rocket.thrusting = true;
-    });
-    window.addEventListener('keyup', e => {
-      if (e.key === 'ArrowUp') rocket.thrusting = false;
+function update(dt) {
+    planets.forEach(p => {
+        p.angle += p.angularSpeed * dt;
+        p.x = SUN_X + p.orbitRadius * SCALE * Math.cos(p.angle);
+        p.y = SUN_Y + p.orbitRadius * SCALE * Math.sin(p.angle);
     });
 
-    function drawSky() {
-      const space = Math.min(rocket.y / canvas.height, 1);
-      const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-      gradient.addColorStop(0, `rgb(${0},${0},${50 + space * 100})`);
-      gradient.addColorStop(1, `rgb(0,0,${space * 255})`);
-      ctx.fillStyle = gradient;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    if (rocket.active && rocket.fuel > 0) {
+        const dx = sun.x - rocket.x;
+        const dy = sun.y - rocket.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        rocket.angle = Math.atan2(dy, dx);
+        rocket.x += rocket.speed * Math.cos(rocket.angle);
+        rocket.y += rocket.speed * Math.sin(rocket.angle);
+        rocket.fuel -= 1;
     }
+}
 
-    function drawRocket() {
-      ctx.fillStyle = '#CCC';
-      ctx.fillRect(rocket.x - rocket.width / 2, rocket.y, rocket.width, rocket.height);
-      ctx.beginPath();
-      ctx.moveTo(rocket.x - rocket.width / 2, rocket.y);
-      ctx.lineTo(rocket.x, rocket.y - 20);
-      ctx.lineTo(rocket.x + rocket.width / 2, rocket.y);
-      ctx.closePath();
-      ctx.fillStyle = '#999';
-      ctx.fill();
+function drawRocket() {
+    ctx.save();
+    ctx.translate(rocket.x, rocket.y);
+    ctx.rotate(rocket.angle + Math.PI / 2);
+    ctx.fillStyle = rocket.color;
+    ctx.beginPath();
+    ctx.moveTo(0, -rocket.height);
+    ctx.lineTo(-rocket.width / 2, rocket.height / 2);
+    ctx.lineTo(rocket.width / 2, rocket.height / 2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+}
 
-      if (rocket.thrusting && rocket.fuel > 0) {
+function drawScene() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Sun
+    ctx.beginPath();
+    ctx.arc(sun.x, sun.y, sun.radius, 0, 2 * Math.PI);
+    ctx.fillStyle = sun.color;
+    ctx.fill();
+
+    // Planets
+    planets.forEach(p => {
         ctx.beginPath();
-        ctx.moveTo(rocket.x, rocket.y + rocket.height);
-        ctx.lineTo(rocket.x - 10, rocket.y + rocket.height + Math.random() * 30 + 10);
-        ctx.lineTo(rocket.x + 10, rocket.y + rocket.height + Math.random() * 30 + 10);
-        ctx.closePath();
-        ctx.fillStyle = `rgb(255, ${Math.random()*200}, 0)`;
+        ctx.arc(p.x, p.y, p.radius, 0, 2 * Math.PI);
+        ctx.fillStyle = p.color;
         ctx.fill();
-      }
-    }
+        ctx.font = "10px Arial";
+        ctx.fillText(p.name, p.x + 5, p.y);
+    });
 
-    function updateRocket() {
-      if (rocket.thrusting && rocket.fuel > 0) {
-        rocket.acceleration = thrustPower;
-        rocket.fuel -= 0.15;
-        statusEl.textContent = "Thrusting";
-      } else {
-        rocket.acceleration = 0;
-        statusEl.textContent = rocket.y < canvas.height - 120 ? "Freefall" : "Idle";
-      }
+    drawRocket();
+}
 
-      rocket.velocityY += gravity + rocket.acceleration;
-      rocket.y += rocket.velocityY;
+function loop(timestamp) {
+    if (!lastTimestamp) lastTimestamp = timestamp;
+    const dt = (timestamp - lastTimestamp) / 1000; // in seconds
+    lastTimestamp = timestamp;
 
-      if (rocket.y > canvas.height - 120) {
-        rocket.y = canvas.height - 120;
-        rocket.velocityY = 0;
-      }
+    update(dt);
+    drawScene();
 
-      if (rocket.y < 200 && rocket.stage === 1) {
-        rocket.stage = 2;
-        thrustPower = -0.3;
-        gravity = 0.1;
-        rocket.fuel = 80;
-        statusEl.textContent = "Stage 2 Activated!";
-        stageEl.textContent = rocket.stage;
-      }
+    requestAnimationFrame(loop);
+}
 
-      altEl.textContent = Math.max(0, Math.floor(canvas.height - rocket.y));
-      velEl.textContent = rocket.velocityY.toFixed(2);
-      fuelEl.textContent = Math.max(0, rocket.fuel.toFixed(0));
-    }
-
-    function animate() {
-      drawSky();
-      updateRocket();
-      drawRocket();
-      requestAnimationFrame(animate);
-    }
-
-    function beginCountdown() {
-      countdownEl.textContent = countdown;
-      const timer = setInterval(() => {
-        countdown--;
-        if (countdown > 0) {
-          countdownEl.textContent = countdown;
-        } else {
-          clearInterval(timer);
-          countdownEl.textContent = "🚀";
-          setTimeout(() => countdownEl.style.display = "none", 1000);
-          launched = true;
-          statusEl.textContent = "Liftoff";
-          animate();
-        }
-      }, 1000);
-    }
-
-    beginCountdown();
-  </script>
+initObjects();
+loop();
+</script>
 </body>
 </html>
