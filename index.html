@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>2D Space Mission: Earth to Sun</title>
+    <title>2D Space Mission: Earth to Mars</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -65,14 +65,14 @@
     </style>
 </head>
 <body>
-    <h1>2D Space Mission: Earth to Sun</h1>
+    <h1>2D Space Mission: Earth to Mars</h1>
     <div id="simulationContainer">
         <canvas id="gameCanvas" width="800" height="600"></canvas>
         <div id="uiPanel">
             <p>Rocket Status: <span id="rocketStatus">Idle</span></p>
             <p>Fuel: <span id="fuelDisplay">1000</span> units</p>
             <p>Speed: <span id="speedDisplay">0</span> km/s</p>
-            <p>Distance to Sun: <span id="distSunDisplay">-</span> km</p>
+            <p>Distance to Mars: <span id="distMarsDisplay">-</span> km</p>
             <p>Game Time: <span id="gameTimeDisplay">0</span> days</p>
             <button id="launchButton">Prepare for Launch</button>
             <button id="resetButton">Reset Simulation</button>
@@ -90,7 +90,7 @@
         const rocketStatusEl = document.getElementById('rocketStatus');
         const fuelDisplayEl = document.getElementById('fuelDisplay');
         const speedDisplayEl = document.getElementById('speedDisplay');
-        const distSunDisplayEl = document.getElementById('distSunDisplay');
+        const distMarsDisplayEl = document.getElementById('distMarsDisplay');
         const gameTimeDisplayEl = document.getElementById('gameTimeDisplay');
         const launchButton = document.getElementById('launchButton');
         const resetButton = document.getElementById('resetButton');
@@ -189,7 +189,7 @@
             rocket = {
                 x: earth.x, y: earth.y, radius: 3, color: 'silver',
                 vx: 0, vy: 0, fuel: 1000, speed: 0,
-                state: 'IDLE_ON_EARTH' // States: IDLE_ON_EARTH, AWAITING_LAUNCH, BURN_TMI, COASTING_HOHMANN, BURN_MOI, ORBITING_SUN, FAILED
+                state: 'IDLE_ON_EARTH' // States: IDLE_ON_EARTH, AWAITING_LAUNCH, BURN_TMI, COASTING_HOHMANN, BURN_MOI, ORBITING_MARS, FAILED
             };
             hohmannTargetPos = null;
             hohmannStartTime = 0;
@@ -259,8 +259,8 @@
 
                 const transferAngle = earth.angle + Math.PI;
                 hohmannTargetPos = {
-                    x: SUN_X,
-                    y: SUN_Y
+                    x: mars.x,
+                    y: mars.y
                 };
             } else if (rocket.state === 'COASTING_HOHMANN') {
                 const timeInTransfer = gameTime - hohmannStartTime;
@@ -276,16 +276,16 @@
                 rocket.x = (1 - t) * (1 - t) * launchX + 2 * (1 - t) * t * controlX + t * t * hohmannTargetPos.x;
                 rocket.y = (1 - t) * (1 - t) * launchY + 2 * (1 - t) * t * controlY + t * t * hohmannTargetPos.y;
 
-                const distToSun = Math.sqrt((rocket.x - SUN_X)**2 + (rocket.y - SUN_Y)**2) / SCALE;
+                const distToMars = Math.sqrt((rocket.x - mars.x)**2 + (rocket.y - mars.y)**2) / SCALE;
                 rocket.speed = (ROCKET_THRUST_DELTA_V * 0.8 * (1 - progress * 0.5)) / 1000;
 
                 if (progress >= 1) {
-                    rocket.state = 'ORBITING_SUN';
+                    rocket.state = 'ORBITING_MARS';
                 }
-            } else if (rocket.state === 'ORBITING_SUN') {
-                const orbitDist = 10;
-                rocket.x = sun.x + orbitDist * Math.cos(gameTime * 0.1);
-                rocket.y = sun.y + orbitDist * Math.sin(gameTime * 0.1);
+            } else if (rocket.state === 'ORBITING_MARS') {
+                const orbitDist = 5;
+                rocket.x = mars.x + orbitDist * Math.cos(gameTime * 0.1);
+                rocket.y = mars.y + orbitDist * Math.sin(gameTime * 0.1);
             }
         }
 
@@ -367,22 +367,22 @@
             gameTimeDisplayEl.textContent = Math.round(gameTime * TIME_SCALE / (24 * 3600)) + " days";
 
             if (rocket.state !== 'IDLE_ON_EARTH' && rocket.state !== 'AWAITING_LAUNCH') {
-                const distKm = Math.sqrt((rocket.x - sun.x)**2 + (rocket.y - sun.y)**2) / SCALE / 1e6;
-                distSunDisplayEl.textContent = distKm.toFixed(2) + " M km";
+                const distKm = Math.sqrt((rocket.x - mars.x)**2 + (rocket.y - mars.y)**2) / SCALE / 1e6;
+                distMarsDisplayEl.textContent = distKm.toFixed(2) + " M km";
             } else {
-                distSunDisplayEl.textContent = "-";
+                distMarsDisplayEl.textContent = "-";
             }
 
             if (rocket.state === 'IDLE_ON_EARTH') {
                 launchButton.textContent = "Prepare for Launch";
                 launchButton.disabled = false;
             } else if (rocket.state === 'AWAITING_LAUNCH') {
-                launchButton.textContent = "Launch to Sun!";
+                launchButton.textContent = "Launch to Mars!";
                 launchButton.disabled = false;
             } else if (rocket.state === 'BURN_TMI' || rocket.state === 'COASTING_HOHMANN') {
                 launchButton.disabled = true;
                 launchButton.textContent = "In Flight...";
-            } else if (rocket.state === 'ORBITING_SUN' || rocket.state === 'FAILED') {
+            } else if (rocket.state === 'ORBITING_MARS' || rocket.state === 'FAILED') {
                 launchButton.disabled = true;
                 launchButton.textContent = "Mission Ended";
             }
@@ -404,7 +404,7 @@
         launchButton.addEventListener('click', () => {
             if (rocket.state === 'IDLE_ON_EARTH') {
                 rocket.state = 'AWAITING_LAUNCH';
-                launchButton.textContent = "Launch to Sun!";
+                launchButton.textContent = "Launch to Mars!";
             } else if (rocket.state === 'AWAITING_LAUNCH') {
                 rocket.state = 'BURN_TMI';
                 launchButton.disabled = true;
